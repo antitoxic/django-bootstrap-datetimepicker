@@ -1,7 +1,7 @@
 import json
 from django import forms
 from django.conf import settings
-from django.utils import translation
+from django.utils import translation, formats
 from django.utils.safestring import mark_safe
 try:
     from django.utils.encoding import force_unicode as force_text
@@ -42,6 +42,22 @@ class BootstrapDateTimeInput(forms.DateTimeInput):
         ('yyyy', r'%Y'),
     )
 
+    @property
+    def format(self):
+        if isinstance(self._format, dict):
+            lang = translation.get_language()
+            try:
+                return self._format[lang]
+            except KeyError:
+                return formats.get_format('DATETIME_INPUT_FORMATS')[0]
+        else:
+            return self._format
+
+    @format.setter
+    def format(self, value):
+        self._format = value
+
+
     def __init__(self, attrs=None, format=None, options=None):
         super(BootstrapDateTimeInput, self).__init__(attrs, format)
         if options is False:
@@ -51,8 +67,6 @@ class BootstrapDateTimeInput(forms.DateTimeInput):
             if 'language' not in self.options:
                 lang = translation.get_language()
                 self.options['language'] = "%s-%s" % (lang.split('-')[0].lower(), lang.split('-')[1].upper()) if '-' in lang else lang
-            if format and not self.options.get('format'):
-                self.options['format'] = self.conv_datetime_format_py2js(format)
             elif not format and not self.options.get('format'):
                 self.options['format'] = self.conv_datetime_format_py2js(DATETIME_INPUT_FORMATS)
 
@@ -63,6 +77,10 @@ class BootstrapDateTimeInput(forms.DateTimeInput):
 
     def render(self, name, value, attrs=None):
         rendered_input = super(BootstrapDateTimeInput, self).render(name, value, attrs)
+        options = self.options
+        if options != False:
+            options = options.copy()
+            options['format'] = self.conv_datetime_format_py2js(self.format)
         html = '''
 <div id="id_%(name)s" class="input-append date" data-bootstrap-widget="datetimepicker">
   "%(input)s
@@ -80,5 +98,5 @@ class BootstrapDateTimeInput(forms.DateTimeInput):
   else if (window.attachEvent){window.attachEvent("onload", callback);}
   else{window.onload = callback;}
  })(window);
-</script>''' % {'name': name, 'value': value, 'options': json.dumps(self.options or {})}
+</script>''' % {'name': name, 'value': value, 'options': json.dumps(options or {})}
         return mark_safe(force_text(html + js))
